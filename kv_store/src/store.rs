@@ -3,6 +3,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
+/// Trait for key-value store backends. Any type implementing this can be used
+/// interchangeably (e.g. MemStore now, DiskStore later).
+pub trait KvStore {
+    fn get(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError>;
+    fn set(&self, key: &str, value: Vec<u8>) -> Result<(), StoreError>;
+    fn delete(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError>;
+}
+
 /// In-memory key-value store. Thread-safe via Arc + RwLock.
 /// - Arc: shared ownership so multiple threads can hold a handle.
 /// - RwLock: coordinates access (many readers OR one writer).
@@ -19,32 +27,28 @@ impl MemStore {
         }
     }
 
-    /// Borrows self (read lock). Returns owned Vec<u8> via .cloned() so we can
-    /// release the lock before returning. key is &str (borrowed, not owned).
-    pub fn get(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
-        let guard = self.data.read()?;
-        Ok(guard.get(key).cloned())
-    }
-
-    /// Borrows self (write lock). key.into() converts &str or String to owned
-    /// String; value is moved into the map. impl Into<String> lets callers pass
-    /// "foo" directly instead of String::from("foo").
-    pub fn set(&self, key: impl Into<String>, value: Vec<u8>) -> Result<(), StoreError> {
-        let mut guard = self.data.write()?;
-        guard.insert(key.into(), value);
-        Ok(())
-    }
-
-    /// Write lock (exclusive). Removes and returns the previous value if any.
-    pub fn delete(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
-        let mut guard = self.data.write()?;
-        Ok(guard.remove(key))
-    }
-
     /// Read lock. Used by Debug/Display and for introspection.
     pub fn len(&self) -> Result<usize, StoreError> {
         let guard = self.data.read()?;
         Ok(guard.len())
+    }
+}
+
+impl KvStore for MemStore {
+    fn get(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
+        let guard = self.data.read()?;
+        Ok(guard.get(key).cloned())
+    }
+
+    fn set(&self, key: &str, value: Vec<u8>) -> Result<(), StoreError> {
+        let mut guard = self.data.write()?;
+        guard.insert(key.to_string(), value);
+        Ok(())
+    }
+
+    fn delete(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
+        let mut guard = self.data.write()?;
+        Ok(guard.remove(key))
     }
 }
 

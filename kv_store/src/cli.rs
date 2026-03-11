@@ -7,12 +7,13 @@
 //! - EXIT / QUIT   — exit the REPL
 
 use crate::error::CliError;
-use crate::store::MemStore;
+use crate::store::KvStore;
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 /// Run the interactive REPL. Returns on I/O error or when stdin is closed.
-pub fn run(store: Arc<MemStore>) -> Result<(), CliError> {
+/// Works with any store implementing KvStore (e.g. MemStore, future DiskStore).
+pub fn run<S: KvStore + Send + Sync>(store: Arc<S>) -> Result<(), CliError> {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut lines = stdin.lock().lines();
@@ -31,7 +32,7 @@ pub fn run(store: Arc<MemStore>) -> Result<(), CliError> {
             continue;
         }
 
-        match execute(&store, line) {
+        match execute(store.as_ref(), line) {
             Ok(response) => println!("{}", response),
             Err(CliError::Parse(msg)) => eprintln!("Error: {}", msg),
             Err(e) => eprintln!("Error: {}", e),
@@ -45,7 +46,7 @@ pub fn run(store: Arc<MemStore>) -> Result<(), CliError> {
 }
 
 /// Parse the line and execute the command. Returns a string to print or an error.
-fn execute(store: &MemStore, line: &str) -> Result<String, CliError> {
+fn execute<S: KvStore>(store: &S, line: &str) -> Result<String, CliError> {
     let mut iter = line.splitn(2, ' ');
     let cmd = iter.next().unwrap_or("").to_uppercase();
     let rest = iter.next().unwrap_or("").trim();
