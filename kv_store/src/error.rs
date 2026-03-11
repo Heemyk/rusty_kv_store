@@ -8,13 +8,22 @@ use std::sync::PoisonError;
 pub enum StoreError {
     /// The RwLock was poisoned (a thread panicked while holding the lock).
     LockPoisoned,
+    /// I/O error (e.g. disk read/write).
+    Io(std::io::Error),
 }
 
 impl fmt::Display for StoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             StoreError::LockPoisoned => write!(f, "store lock poisoned (previous thread panicked)"),
+            StoreError::Io(e) => write!(f, "i/o error: {}", e),
         }
+    }
+}
+
+impl From<std::io::Error> for StoreError {
+    fn from(e: std::io::Error) -> Self {
+        StoreError::Io(e)
     }
 }
 
